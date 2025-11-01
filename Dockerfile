@@ -1,34 +1,28 @@
 FROM ubuntu:22.04
 
-# Set noninteractive mode for faster build (avoids tzdata prompts)
+# Avoid interactive prompts during apt installs
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies for Yagna CLI and Jupyter
+# Install minimal dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3 python3-pip git curl build-essential pkg-config \
-        libssl-dev jq ca-certificates sudo && \
+    git curl build-essential pkg-config libssl-dev jq python3 python3-pip ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Create Binder-friendly user (jovyan)
-RUN useradd -m -s /bin/bash jovyan && echo "jovyan ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Clone Yagna repo (you just want source, not running daemon)
+RUN git clone --depth=1 https://github.com/golemfactory/yagna.git /opt/yagna
 
-USER jovyan
-WORKDIR /home/jovyan
+WORKDIR /opt/yagna
 
-# Clone Yagna into user's home directory
-RUN git clone --depth=1 https://github.com/golemfactory/yagna.git yagna
+# Add a simple check so Binder sees output
+RUN echo "Yagna source cloned successfully!"
 
-WORKDIR /home/jovyan/yagna
+# Install Jupyter + fixes for Binder
+RUN pip install --no-cache-dir notebook jupyterlab
 
-# Display confirmation
-RUN ls && echo "Yagna source ready! (no systemd, no network daemon running)"
-
-# Install Jupyter Notebook
-RUN pip install --no-cache-dir notebook
-
-# Expose Binder’s expected port
+# Binder exposes port 8888
 EXPOSE 8888
 
-# Final CMD: start notebook on 0.0.0.0
-CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--no-browser", "--allow-root"]
+# Disable token requirement and allow root (Binder runs as root)
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.token=''", "--NotebookApp.password=''", "--allow-root"]
+
